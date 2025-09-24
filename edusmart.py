@@ -390,7 +390,7 @@ def page_listes():
     # Le reste du code de la page des listes
 
 
-def inscription_etablissement_page():
+def page_inscription():
     st.title("Inscription d'un nouvel établissement")
     st.info("Veuillez remplir ce formulaire pour créer votre établissement et votre compte administrateur.")
 
@@ -455,9 +455,9 @@ def main():
         ensure_dirs()
     
     etablissements_count = get_etablissement_count()
-    if etablissements_count == 0:
-        inscription_etablissement_page()
-    elif 'logged_in' not in st.session_state:
+    
+    if 'logged_in' not in st.session_state:
+        # Affiche la page de connexion par défaut si l'utilisateur n'est pas connecté
         login_page()
     else:
         user_role = st.session_state['user_role']
@@ -466,8 +466,13 @@ def main():
             st.session_state.clear()
             st.experimental_rerun()
 
+        # Construction du dictionnaire de pages avec la page d'inscription si moins de 5 établissements
+        pages = {}
+        if etablissements_count < 5:
+            pages["➕ Inscription Établissement"] = page_inscription
+
         if user_role == "admin" or user_role == "direction":
-            pages = {
+            pages.update({
                 "📊 Tableau de bord": page_dashboard,
                 "🏷️ Classes": page_classes,
                 "👨‍🎓 Étudiants": page_etudiants,
@@ -475,16 +480,16 @@ def main():
                 "✍️ Présences & Absences": page_presences,
                 "📄 Bulletins & Relevés": page_bulletins,
                 "📄 Listes d'étudiants": page_listes
-            }
+            })
         elif user_role == "comptable" or user_role == "economat":
-            pages = {
+            pages.update({
                 "📊 Tableau de bord": page_dashboard,
                 "💰 Modalités": page_modalites,
                 "💳 Paiements": page_paiements,
                 "📄 Listes d'étudiants": page_listes
-            }
+            })
         elif user_role == "teacher":
-            pages = {
+            pages.update({
                 "🏷️ Classes": page_classes,
                 "📘 Matières": page_matieres,
                 "👨‍🎓 Étudiants": page_etudiants,
@@ -492,12 +497,12 @@ def main():
                 "✍️ Présences & Absences": page_presences,
                 "📄 Bulletins & Relevés": page_bulletins,
                 "📄 Listes d'étudiants": page_listes
-            }
+            })
         elif user_role == "student":
-            pages = {
+            pages.update({
                 "📄 Bulletins & Relevés": page_bulletins,
                 "📄 Listes d'étudiants": page_listes
-            }
+            })
         else:
             st.warning("Votre rôle n'a pas de pages attribuées.")
             return

@@ -1,0 +1,6 @@
+streamlit
+pandas
+sqlite3
+reportlab
+psycopg2-binary
+cloudinary

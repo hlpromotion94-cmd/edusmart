@@ -12,15 +12,17 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+import psycopg2
+from io import BytesIO
 
 # ================== CONFIGURATION ==================
-# Utilise les secrets de Streamlit pour les connexions cloud
+st.set_page_config(layout="wide")
+
 DATABASE_URL = st.secrets.get("DATABASE_URL", "").strip()
 CLOUDINARY_CLOUD_NAME = st.secrets.get("CLOUDINARY_CLOUD_NAME")
 CLOUDINARY_API_KEY = st.secrets.get("CLOUDINARY_API_KEY")
 CLOUDINARY_API_SECRET = st.secrets.get("CLOUDINARY_API_SECRET")
 
-# Configuration de Cloudinary
 if all([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
     cloudinary.config(
         cloud_name=CLOUDINARY_CLOUD_NAME,
@@ -28,7 +30,6 @@ if all([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
         api_secret=CLOUDINARY_API_SECRET
     )
 
-# Les répertoires locaux ne sont nécessaires que pour le mode développement
 LOCAL_STORAGE_MODE = not all([DATABASE_URL, CLOUDINARY_CLOUD_NAME])
 DB_FILE = "edusmart.db"
 UPLOAD_DIR_PHOTOS = "uploads/photos"
@@ -106,9 +107,7 @@ def handle_logo_upload(uploaded_file):
 # ================== DATABASE ==================
 def get_conn():
     if DATABASE_URL:
-        # Mode production (PostgreSQL)
         try:
-            import psycopg2
             conn = psycopg2.connect(DATABASE_URL)
             return conn
         except ImportError:
@@ -118,7 +117,6 @@ def get_conn():
             st.error(f"Erreur de connexion à la base de données PostgreSQL : {e}")
             st.stop()
     else:
-        # Mode local (SQLite)
         conn = sqlite3.connect(DB_FILE)
         return conn
 
@@ -227,7 +225,6 @@ def init_db():
         motif TEXT
     );""")
 
-    # Fonctions de migration pour ajouter les nouvelles colonnes
     if LOCAL_STORAGE_MODE:
         c.execute("PRAGMA table_info(matieres)")
         columns = [info[1] for info in c.fetchall()]
@@ -248,17 +245,20 @@ def init_db():
         if 'matricule' not in columns:
             c.execute("ALTER TABLE etudiants ADD COLUMN matricule TEXT")
     else:
-        # Pour PostgreSQL, nous utilisons une approche différente pour vérifier l'existence des colonnes
-        # Cette logique n'est plus nécessaire car vous l'avez exécutée manuellement
         pass
 
     conn.commit()
     conn.close()
 
-# Reste du code de votre application (fonctions de gestion des données, interface utilisateur Streamlit, etc.)
-# ...
-
 # ================== FONCTIONS D'ACCÈS AUX DONNÉES ==================
+def get_etablissement_count():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM etablissement")
+    count = c.fetchone()[0]
+    conn.close()
+    return count
+
 def get_user_by_email(email):
     conn = get_conn()
     c = conn.cursor()
@@ -334,26 +334,65 @@ def add_note(etudiant_id, matiere_id, session, type_note, controle, note):
     conn.commit()
     conn.close()
 
-# Reste des fonctions pour les paiements, présences, etc.
-# ...
-
-
 # ================== INTERFACE UTILISATEUR ==================
+def inscription_etablissement_page():
+    st.title("Inscription d'un nouvel établissement")
+    st.info("Veuillez remplir ce formulaire pour créer votre établissement et votre compte administrateur.")
+    
+    with st.form("form_inscription"):
+        st.subheader("Informations de l'établissement")
+        col1, col2 = st.columns(2)
+        with col1:
+            nom_etab = st.text_input("Nom de l'établissement", placeholder="Nom de l'école")
+            adresse_etab = st.text_input("Adresse de l'établissement", placeholder="Adresse complète")
+            telephone_etab = st.text_input("Téléphone de l'établissement", placeholder="Numéro de téléphone")
+        with col2:
+            directeur_etab = st.text_input("Nom du directeur", placeholder="Nom du directeur")
+            email_etab = st.text_input("Email de contact de l'établissement", placeholder="info@etablissement.com")
+            logo_upload = st.file_uploader("Logo de l'établissement (optionnel)", type=["png", "jpg", "jpeg"])
+
+        st.subheader("Création du compte administrateur")
+        col3, col4 = st.columns(2)
+        with col3:
+            email_admin = st.text_input("Email de l'administrateur", placeholder="admin@votre-etablissement.com")
+        with col4:
+            password_admin = st.text_input("Mot de passe de l'administrateur", type="password", placeholder="Mot de passe")
+        
+        submitted = st.form_submit_button("S'inscrire et créer l'établissement")
+
+        if submitted:
+            if not all([nom_etab, directeur_etab, email_admin, password_admin]):
+                st.error("Veuillez remplir tous les champs obligatoires.")
+            else:
+                logo_url = handle_logo_upload(logo_upload)
+                
+                try:
+                    etablissement_id = add_etablissement(nom_etab, adresse_etab, telephone_etab, directeur_etab, email_etab, logo_url)
+                    create_user(email_admin, password_admin, 'admin', etablissement_id)
+                    st.success("Inscription réussie ! Vous pouvez maintenant vous connecter.")
+                    st.session_state['show_login'] = True
+                    st.experimental_rerun()
+                except Exception as e:
+                    st.error(f"Une erreur est survenue lors de l'inscription : {e}")
+
+
 def login_page():
     st.title("Connexion")
-    email = st.text_input("Email")
-    password = st.text_input("Mot de passe", type="password")
-    if st.button("Se connecter"):
-        user = get_user_by_email(email)
-        if user and user[2] == hash_password(password):
-            st.session_state['logged_in'] = True
-            st.session_state['user_id'] = user[0]
-            st.session_state['user_role'] = user[3]
-            st.session_state['etablissement_id'] = user[4]
-            st.success("Connexion réussie!")
-            st.experimental_rerun()
-        else:
-            st.error("Email ou mot de passe incorrect.")
+    with st.container():
+        st.subheader("Connectez-vous à votre compte")
+        email = st.text_input("Email")
+        password = st.text_input("Mot de passe", type="password")
+        if st.button("Se connecter"):
+            user = get_user_by_email(email)
+            if user and user[2] == hash_password(password):
+                st.session_state['logged_in'] = True
+                st.session_state['user_id'] = user[0]
+                st.session_state['user_role'] = user[3]
+                st.session_state['etablissement_id'] = user[4]
+                st.success("Connexion réussie!")
+                st.experimental_rerun()
+            else:
+                st.error("Email ou mot de passe incorrect.")
 
 def dashboard():
     st.sidebar.title("Navigation")
@@ -362,17 +401,33 @@ def dashboard():
         st.experimental_rerun()
 
     st.title(f"Tableau de bord - Rôle : {st.session_state['user_role']}")
-    # ... UI pour chaque rôle (Admin, Professeur, etc.)
+    
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.header("Statistiques")
+        st.metric(label="Nombre d'étudiants", value=150)
+        st.metric(label="Nombre de classes", value=10)
+    
+    with col2:
+        st.header("Vue d'ensemble")
+        st.info("Bienvenue dans votre tableau de bord.")
+
 
 # ================== MAIN APP ==================
 def main():
-    if 'logged_in' not in st.session_state:
+    if LOCAL_STORAGE_MODE:
+        init_db()
+        ensure_dirs()
+    
+    etablissements_count = get_etablissement_count()
+    if etablissements_count == 0:
+        inscription_etablissement_page()
+    elif 'logged_in' not in st.session_state:
         login_page()
     else:
         dashboard()
 
+
 if __name__ == "__main__":
-    if LOCAL_STORAGE_MODE:
-        init_db()
-        ensure_dirs()
     main()

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import cloudinary
 import cloudinary.uploader
@@ -7,11 +8,12 @@ import sqlite3
 import hashlib
 from datetime import datetime, date, timedelta
 import pandas as pd
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from reportlab.platypus.flowables import HRFlowable
 import psycopg2
 from io import BytesIO
 
@@ -334,11 +336,64 @@ def add_note(etudiant_id, matiere_id, session, type_note, controle, note):
     conn.commit()
     conn.close()
 
+
 # ================== INTERFACE UTILISATEUR ==================
+# Pages de l'application
+def page_dashboard():
+    st.title("📊 Tableau de bord")
+    st.write("Bienvenue dans votre tableau de bord!")
+    # Le reste du code de votre tableau de bord
+
+def page_classes():
+    st.title("🏷️ Classes")
+    st.write("Gestion des classes.")
+    # Le reste du code de la page des classes
+
+def page_etudiants():
+    st.title("👨‍🎓 Étudiants")
+    st.write("Gestion des étudiants.")
+    # Le reste du code de la page des étudiants
+
+def page_notes():
+    st.title("📝 Notes")
+    st.write("Saisie des notes.")
+    # Le reste du code de la page des notes
+
+def page_modalites():
+    st.title("💰 Modalités")
+    st.write("Gestion des modalités de paiement.")
+    # Le reste du code de la page des modalités
+
+def page_paiements():
+    st.title("💳 Paiements")
+    st.write("Suivi des paiements.")
+    # Le reste du code de la page des paiements
+
+def page_matieres():
+    st.title("📘 Matières")
+    st.write("Gestion des matières.")
+    # Le reste du code de la page des matières
+
+def page_presences():
+    st.title("✍️ Présences & Absences")
+    st.write("Gestion des présences.")
+    # Le reste du code de la page des présences
+
+def page_bulletins():
+    st.title("📄 Bulletins & Relevés")
+    st.write("Génération des bulletins.")
+    # Le reste du code de la page des bulletins
+
+def page_listes():
+    st.title("📄 Listes d'étudiants")
+    st.write("Listes des étudiants.")
+    # Le reste du code de la page des listes
+
+
 def inscription_etablissement_page():
     st.title("Inscription d'un nouvel établissement")
     st.info("Veuillez remplir ce formulaire pour créer votre établissement et votre compte administrateur.")
-    
+
     with st.form("form_inscription"):
         st.subheader("Informations de l'établissement")
         col1, col2 = st.columns(2)
@@ -357,7 +412,7 @@ def inscription_etablissement_page():
             email_admin = st.text_input("Email de l'administrateur", placeholder="admin@votre-etablissement.com")
         with col4:
             password_admin = st.text_input("Mot de passe de l'administrateur", type="password", placeholder="Mot de passe")
-        
+
         submitted = st.form_submit_button("S'inscrire et créer l'établissement")
 
         if submitted:
@@ -365,7 +420,6 @@ def inscription_etablissement_page():
                 st.error("Veuillez remplir tous les champs obligatoires.")
             else:
                 logo_url = handle_logo_upload(logo_upload)
-                
                 try:
                     etablissement_id = add_etablissement(nom_etab, adresse_etab, telephone_etab, directeur_etab, email_etab, logo_url)
                     create_user(email_admin, password_admin, 'admin', etablissement_id)
@@ -374,7 +428,6 @@ def inscription_etablissement_page():
                     st.experimental_rerun()
                 except Exception as e:
                     st.error(f"Une erreur est survenue lors de l'inscription : {e}")
-
 
 def login_page():
     st.title("Connexion")
@@ -394,25 +447,6 @@ def login_page():
             else:
                 st.error("Email ou mot de passe incorrect.")
 
-def dashboard():
-    st.sidebar.title("Navigation")
-    if st.sidebar.button("Déconnexion"):
-        st.session_state.clear()
-        st.experimental_rerun()
-
-    st.title(f"Tableau de bord - Rôle : {st.session_state['user_role']}")
-    
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.header("Statistiques")
-        st.metric(label="Nombre d'étudiants", value=150)
-        st.metric(label="Nombre de classes", value=10)
-    
-    with col2:
-        st.header("Vue d'ensemble")
-        st.info("Bienvenue dans votre tableau de bord.")
-
 
 # ================== MAIN APP ==================
 def main():
@@ -426,7 +460,50 @@ def main():
     elif 'logged_in' not in st.session_state:
         login_page()
     else:
-        dashboard()
+        user_role = st.session_state['user_role']
+        st.sidebar.title("Navigation")
+        if st.sidebar.button("Déconnexion"):
+            st.session_state.clear()
+            st.experimental_rerun()
+
+        if user_role == "admin" or user_role == "direction":
+            pages = {
+                "📊 Tableau de bord": page_dashboard,
+                "🏷️ Classes": page_classes,
+                "👨‍🎓 Étudiants": page_etudiants,
+                "📝 Notes": page_notes,
+                "✍️ Présences & Absences": page_presences,
+                "📄 Bulletins & Relevés": page_bulletins,
+                "📄 Listes d'étudiants": page_listes
+            }
+        elif user_role == "comptable" or user_role == "economat":
+            pages = {
+                "📊 Tableau de bord": page_dashboard,
+                "💰 Modalités": page_modalites,
+                "💳 Paiements": page_paiements,
+                "📄 Listes d'étudiants": page_listes
+            }
+        elif user_role == "teacher":
+            pages = {
+                "🏷️ Classes": page_classes,
+                "📘 Matières": page_matieres,
+                "👨‍🎓 Étudiants": page_etudiants,
+                "📝 Notes": page_notes,
+                "✍️ Présences & Absences": page_presences,
+                "📄 Bulletins & Relevés": page_bulletins,
+                "📄 Listes d'étudiants": page_listes
+            }
+        elif user_role == "student":
+            pages = {
+                "📄 Bulletins & Relevés": page_bulletins,
+                "📄 Listes d'étudiants": page_listes
+            }
+        else:
+            st.warning("Votre rôle n'a pas de pages attribuées.")
+            return
+
+        choix = st.sidebar.radio("Menu de navigation", list(pages.keys()))
+        pages[choix]()
 
 
 if __name__ == "__main__":

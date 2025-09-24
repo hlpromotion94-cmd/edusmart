@@ -1,6 +1,6 @@
-streamlit
-pandas
-sqlite3
-reportlab
-psycopg2-binary
-cloudinary
+streamlit==1.36.0
+pandas==2.2.2
+sqlite3==3.15.0.0
+reportlab==4.1.0
+psycopg2-binary==2.9.9
+cloudinary==1.40.0
